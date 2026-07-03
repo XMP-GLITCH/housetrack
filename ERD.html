@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HouseTrack — Entity Relationship Diagram</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; padding: 32px; }
+  h1 { color: #C97B2E; font-size: 22px; margin-bottom: 6px; }
+  p.sub { color: #64748b; font-size: 13px; margin-bottom: 40px; }
+
+  .canvas { position: relative; width: 1200px; height: 860px; margin: 0 auto; }
+
+  /* Entity boxes */
+  .entity {
+    position: absolute;
+    background: #1e2330;
+    border: 2px solid #2d3548;
+    border-radius: 10px;
+    min-width: 200px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .entity-header {
+    padding: 10px 14px;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .entity-body { padding: 4px 0 8px; }
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 14px;
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .field .name { flex: 1; }
+  .field .type { color: #475569; font-size: 11px; }
+  .pk { color: #fbbf24 !important; }
+  .fk { color: #818cf8 !important; }
+  .tag {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+  .tag-pk { background: #78350f; color: #fbbf24; }
+  .tag-fk { background: #1e1b4b; color: #818cf8; }
+  .tag-null { background: #1e293b; color: #475569; }
+
+  /* Colour per entity */
+  .u  .entity-header { background: #C97B2E22; border-bottom: 2px solid #C97B2E; color: #C97B2E; }
+  .p  .entity-header { background: #3b82f622; border-bottom: 2px solid #3b82f6; color: #60a5fa; }
+  .r  .entity-header { background: #8b5cf622; border-bottom: 2px solid #8b5cf6; color: #a78bfa; }
+  .t  .entity-header { background: #10b98122; border-bottom: 2px solid #10b981; color: #34d399; }
+  .py .entity-header { background: #f59e0b22; border-bottom: 2px solid #f59e0b; color: #fcd34d; }
+  .rc .entity-header { background: #06b6d422; border-bottom: 2px solid #06b6d4; color: #67e8f9; }
+  .c  .entity-header { background: #ef444422; border-bottom: 2px solid #ef4444; color: #fca5a5; }
+
+  /* SVG arrows drawn on top */
+  svg.arrows { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  /* Legend */
+  .legend { margin-top: 24px; max-width: 1200px; margin-left: auto; margin-right: auto; }
+  .legend h2 { font-size: 14px; color: #94a3b8; margin-bottom: 12px; }
+  .legend-grid { display: flex; flex-wrap: wrap; gap: 24px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* Isolation audit */
+  .audit { max-width: 1200px; margin: 40px auto 0; }
+  .audit h2 { font-size: 16px; color: #C97B2E; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; padding: 8px 12px; background: #1e2330; color: #64748b; border-bottom: 1px solid #2d3548; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1e2330; color: #94a3b8; }
+  td.pass { color: #34d399; font-weight: 600; }
+  td.warn { color: #fbbf24; font-weight: 600; }
+  tr:hover td { background: #1e2330; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; margin-right: 4px; }
+  .pill-l { background: #C97B2E33; color: #C97B2E; }
+  .pill-t { background: #10b98133; color: #34d399; }
+</style>
+</head>
+<body>
+<h1>HouseTrack — Entity Relationship Diagram</h1>
+<p class="sub">Data model for multi-landlord rental management. Every entity is scoped to its owner — landlords cannot see each other's data.</p>
+
+<div class="canvas" id="canvas">
+
+  <!-- USERS -->
+  <div class="entity u" id="e-users" style="left:480px;top:20px;">
+    <div class="entity-header">users</div>
+    <div class="entity-body">
+      <div class="field"><span class="name pk">id</span><span class="tag tag-pk">PK</span></div>
+      <div class="field"><span class="name">supabase_uid</span><span class="type">unique</span></div>
+      <div class="field"><span class="name">email</span><span class="type">unique</span></div>
+      <div class="field"><span class="name">full_name</span></div>
+      <div class="field"><span class="name">role</span><span class="type">landlord|tenant|admin</span></div>
+      <div class="field"><span class="name">status</span><span class="type">active|inactive</span></div>
+    </div>
+  </div>
+
+  <!-- PROPERTY -->
+  <div class="entity p" id="e-property" style="left:100px;top:240px;">
+    <div class="entity-header">properties</div>
+    <div class="entity-body">
+      <div class="field"><span class="name pk">id</span><span class="tag tag-pk">PK</span></div>
+      <div class="field"><span class="name fk">landlord_id</span><span class="tag tag-fk">FK → users</span></div>
+      <div class="field"><span class="name">property_name</span></div>
+      <div class="field"><span class="name">location</span></div>
+      <div class="field"><span class="name">property_type</span></div>
+      <div class="field"><span class="name">status</span><span class="type">active|inactive</span></div>
+    </div>
+  </div>
+
+  <!-- TENANT -->
+  <div class="entity t" id="e-tenant" style="left:820px;top:240px;">
+    <div class="entity-header">tenants</div>
+    <div class="entity-body">
+      <div class="field"><span class="name pk">id</span><span class="tag tag-pk">PK</span></div>
+      <div class="field"><span class="name fk">landlord_id</span><span class="tag tag-fk">FK → users</span></div>
+      <div class="field"><span class="name fk">user_id</span><span class="tag tag-fk">FK → users</span><span class="tag tag-null">nullable</span></div>
+      <div class="field"><span class="name fk">room_id</span><span class="tag tag-fk">FK → rooms</span><span class="tag tag-null">nullable</span></div>
+      <div class="field"><span class="name">full_name</span></div>
+      <div class="field"><span class="name">phone</span></div>
+      <div class="field"><span class="name">email</span></div>
+      <div class="field"><span class="name">move_in_date</span></div>
+      <div class="field"><span class="name">status</span><span class="type">active|vacated</span></div>
+    </div>
+  </div>
+
+  <!-- ROOM -->
+  <div class="entity r" id="e-room" style="left:100px;top:510px;">
+    <div class="entity-header">rooms</div>
+    <div class="entity-body">
+      <div class="field"><span class="name pk">id</span><span class="tag tag-pk">PK</span></div>
+      <div class="field"><span class="name fk">property_id</span><span class="tag tag-fk">FK → properties</span></div>
+      <div class="field"><span class="name">room_number</span></div>
+      <div class="field"><span class="name">room_type</span></div>
+      <div class="field"><span class="name">rent_amount</span><span class="type">XAF</span></div>
+      <div class="field"><span class="name">status</span><span class="type">available|occupied|maintenance</span></div>
+    </div>
+  </div>
+
+  <!-- PAYMENT -->
+  <div class="entity py" id="e-payment" style="left:460px;top:430px;">
+    <div class="entity-header">payments</div>
+    <div class="entity-body">
+      <div class="field"><span class="name pk">id</span><span class="tag tag-pk">PK</span></div>
+      <div class="field"><span class="name fk">tenant_id</span><span class="tag tag-fk">FK → tenants</span></div>
+      <div class="field"><span class="name fk">room_id</span><span class="tag tag-fk">FK → rooms</span></div>
+      <div class="field"><span class="name fk">landlord_id</span><span class="tag tag-fk">FK → users</span></div>
+      <div class="field"><span class="name">rent_month</span><span class="type">YYYY-MM</span></div>
+      <div class="field"><span class="name">rent_amount</span></div>
+      <div class="field"><span class="name">amount_paid</span></div>
+      <div class="field"><span class="name">balance</span></div>
+      <div class="field"><span class="name">payment_status</span><span class="type">unpaid|part|paid|overdue</span></div>
+      <div class="field"><span class="name">notchpay_reference</span></div>
+      <div class="field"><span class="name">notchpay_status</span></div>
+    </div>
+  </div>
+
+  <!-- RECEIPT -->
+  <div class="entity rc" id="e-receipt" style="left:460px;top:720px;">
+    <div class="entity-header">receipts</div>
+    <div class="entity-body">
+      <div class="field"><span class="name pk">id</span><span class="tag tag-pk">PK</span></div>
+      <div class="field"><span class="name fk">payment_id</span><span class="tag tag-fk">FK → payments</span><span class="type">unique</span></div>
+      <div class="field"><span class="name">receipt_number</span><span class="type">unique</span></div>
+      <div class="field"><span class="name">generated_at</span></div>
+    </div>
+  </div>
+
+  <!-- COMPLAINT -->
+  <div class="entity c" id="e-complaint" style="left:870px;top:560px;">
+    <div class="entity-header">complaints</div>
+    <div class="entity-body">
+      <div class="field"><span class="name pk">id</span><span class="tag tag-pk">PK</span></div>
+      <div class="field"><span class="name fk">tenant_id</span><span class="tag tag-fk">FK → tenants</span></div>
+      <div class="field"><span class="name fk">room_id</span><span class="tag tag-fk">FK → rooms</span></div>
+      <div class="field"><span class="name fk">landlord_id</span><span class="tag tag-fk">FK → users</span></div>
+      <div class="field"><span class="name">title</span></div>
+      <div class="field"><span class="name">category</span></div>
+      <div class="field"><span class="name">status</span><span class="type">pending|in_progress|resolved</span></div>
+    </div>
+  </div>
+
+  <!-- SVG Arrows -->
+  <svg class="arrows" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#475569"/>
+      </marker>
+    </defs>
+
+    <!-- users → properties (landlord_id) -->
+    <line x1="530" y1="148" x2="260" y2="240" stroke="#C97B2E" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5,3"/>
+
+    <!-- users → tenants (landlord_id) -->
+    <line x1="630" y1="148" x2="870" y2="240" stroke="#C97B2E" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5,3"/>
+
+    <!-- users → tenants (user_id) -->
+    <line x1="680" y1="148" x2="940" y2="240" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- properties → rooms (property_id) -->
+    <line x1="200" y1="358" x2="200" y2="510" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- tenants → payments (tenant_id) -->
+    <line x1="860" y1="430" x2="720" y2="500" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- rooms → payments (room_id) -->
+    <line x1="310" y1="570" x2="460" y2="560" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- users → payments (landlord_id) -->
+    <line x1="570" y1="148" x2="570" y2="430" stroke="#C97B2E" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5,3"/>
+
+    <!-- payments → receipts (payment_id) -->
+    <line x1="570" y1="640" x2="570" y2="720" stroke="#06b6d4" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- tenants → complaints (tenant_id) -->
+    <line x1="960" y1="470" x2="960" y2="560" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- rooms → complaints (room_id) -->
+    <line x1="310" y1="620" x2="870" y2="640" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- users → complaints (landlord_id) -->
+    <line x1="700" y1="148" x2="980" y2="560" stroke="#C97B2E" stroke-width="1.5" marker-end="url(#arrow)" stroke-dasharray="5,3"/>
+
+    <!-- tenants → rooms (room_id back-ref label) -->
+    <line x1="820" y1="350" x2="310" y2="560" stroke="#475569" stroke-width="1" marker-end="url(#arrow)" stroke-dasharray="3,4"/>
+  </svg>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <h2>LEGEND</h2>
+  <div class="legend-grid">
+    <div class="legend-item"><div class="dot" style="background:#C97B2E"></div>landlord_id isolation key (every entity scoped to its landlord)</div>
+    <div class="legend-item"><div class="dot" style="background:#10b981"></div>tenant login link (user_id)</div>
+    <div class="legend-item"><div class="dot" style="background:#3b82f6"></div>property → room ownership chain</div>
+    <div class="legend-item"><div class="dot" style="background:#8b5cf6"></div>room reference</div>
+    <div class="legend-item"><div class="dot" style="background:#06b6d4"></div>payment → receipt (1-to-1)</div>
+    <div class="legend-item"><div class="dot" style="background:#475569; border: 1px dashed #64748b"></div>dashed = FK shortcut (denormalized for fast queries)</div>
+  </div>
+</div>
+
+<!-- Isolation Audit -->
+<div class="audit">
+  <h2>Multi-Landlord Isolation Audit</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Entity</th>
+        <th>Who can read</th>
+        <th>Isolation mechanism</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>properties</td>
+        <td><span class="pill pill-l">landlord</span></td>
+        <td>all queries filter <code>WHERE landlord_id = req.user.id</code></td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+      <tr>
+        <td>rooms</td>
+        <td><span class="pill pill-l">landlord</span></td>
+        <td>each operation first finds <code>Property WHERE landlord_id = req.user.id</code> — room inherits ownership via its property</td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+      <tr>
+        <td>tenants (list/edit/invite)</td>
+        <td><span class="pill pill-l">landlord</span></td>
+        <td>all queries filter <code>WHERE landlord_id = req.user.id</code></td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+      <tr>
+        <td>tenants (own profile)</td>
+        <td><span class="pill pill-t">tenant</span></td>
+        <td><code>WHERE user_id = req.user.id AND status = 'active' ORDER BY id DESC</code> — picks the latest active record, ignores vacated history</td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+      <tr>
+        <td>payments (landlord view)</td>
+        <td><span class="pill pill-l">landlord</span></td>
+        <td>all queries filter <code>WHERE landlord_id = req.user.id</code></td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+      <tr>
+        <td>payments (tenant view)</td>
+        <td><span class="pill pill-t">tenant</span></td>
+        <td>tenant can only request their own <code>tenant_id</code>, verified via <code>tenant.user_id === req.user.id</code></td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+      <tr>
+        <td>complaints (landlord view)</td>
+        <td><span class="pill pill-l">landlord</span></td>
+        <td>all queries filter <code>WHERE landlord_id = req.user.id</code></td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+      <tr>
+        <td>complaints (tenant view)</td>
+        <td><span class="pill pill-t">tenant</span></td>
+        <td>verifies <code>tenant.user_id = req.user.id</code> before returning complaints for that tenant_id</td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+      <tr>
+        <td>receipts</td>
+        <td><span class="pill pill-l">landlord</span><span class="pill pill-t">tenant</span></td>
+        <td>landlord: <code>payment.landlord_id = req.user.id</code> · tenant: active tenant lookup prevents vacated-record shadow</td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+      <tr>
+        <td>reports/summary</td>
+        <td><span class="pill pill-l">landlord</span></td>
+        <td>all counts/sums filtered by <code>landlord_id = req.user.id</code></td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+      <tr>
+        <td>reports/admin-summary</td>
+        <td>admin only</td>
+        <td>roleCheck(['admin']) gate — shows platform totals, no per-landlord data exposed</td>
+        <td class="pass">✓ Isolated</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:20px; font-size:12px; color:#475569;">
+    <strong style="color:#34d399">Key rule enforced throughout:</strong>
+    Each landlord's data is an independent island. A landlord's properties, rooms, tenants, payments, complaints, and reports
+    are all filtered by their own <code>user.id</code>. No landlord can read, write, or affect another landlord's records.
+    Tenants only see their own profile, their own payments, and their own complaints — they cannot browse other tenants.
+  </p>
+</div>
+
+</body>
+</html>
