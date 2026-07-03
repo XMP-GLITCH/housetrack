@@ -1,9 +1,14 @@
 const { Sequelize } = require('sequelize');
 
-const sequelize = new Sequelize(process.env.DATABASE_URL, {
+const url = process.env.DATABASE_URL || '';
+const isRailway = url.includes('railway') || url.includes('rlwy.net');
+
+const sequelize = new Sequelize(url, {
   dialect: 'mysql',
   logging: false,
-  dialectOptions: {},
+  dialectOptions: isRailway
+    ? { ssl: { rejectUnauthorized: false } }
+    : {},
   pool: {
     max: 5,
     min: 0,
