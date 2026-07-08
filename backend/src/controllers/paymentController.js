@@ -1,5 +1,5 @@
 const { Payment, Tenant, Room, Receipt, Property, sequelize } = require('../models');
-const { initiatePayment, verifyWebhookSignature } = require('../utils/notchpay');
+const { initiatePayment, verifyPayment, verifyWebhookSignature } = require('../utils/notchpay');
 const { generateReceiptNumber } = require('../utils/receiptNumber');
 
 const getPayments = async (req, res) => {
@@ -269,10 +269,69 @@ const recordManualPayment = async (req, res) => {
   }
 };
 
+const verifyRentPayment = async (req, res) => {
+  try {
+    const { reference } = req.body;
+    if (!reference) return res.status(400).json({ success: false, error: 'Reference is required' });
+
+    const payment = await Payment.findOne({ where: { notchpay_reference: reference } });
+    if (!payment) return res.status(404).json({ success: false, error: 'Payment record not found' });
+
+    // Already confirmed — return current state without calling Notchpay again
+    if (payment.notchpay_status === 'complete') {
+      const receipt = await Receipt.findOne({ where: { payment_id: payment.id } });
+      return res.json({ success: true, data: { payment, receipt } });
+    }
+
+    let notchpayData;
+    try {
+      const result = await verifyPayment(reference);
+      notchpayData = result?.transaction || result?.data || result;
+    } catch (err) {
+      return res.status(502).json({ success: false, error: 'Could not reach payment provider to verify' });
+    }
+
+    const status = notchpayData?.status;
+    if (status !== 'complete') {
+      return res.json({ success: false, error: `Payment not confirmed. Status: ${status || 'unknown'}` });
+    }
+
+    const amountPaid = Number(notchpayData.amount || notchpayData.converted_amount || payment.rent_amount);
+    const balance = Math.max(0, Number(payment.rent_amount) - amountPaid);
+    const paymentStatus = balance === 0 ? 'paid' : amountPaid > 0 ? 'part_payment' : 'unpaid';
+
+    let receipt;
+    await sequelize.transaction(async (t) => {
+      payment.amount_paid = amountPaid;
+      payment.balance = balance;
+      payment.payment_status = paymentStatus;
+      payment.notchpay_status = 'complete';
+      await payment.save({ transaction: t });
+
+      const existing = await Receipt.findOne({ where: { payment_id: payment.id }, transaction: t });
+      if (!existing && amountPaid > 0) {
+        receipt = await Receipt.create({
+          payment_id: payment.id,
+          receipt_number: generateReceiptNumber(),
+          generated_at: new Date(),
+        }, { transaction: t });
+      } else {
+        receipt = existing;
+      }
+    });
+
+    res.json({ success: true, data: { payment, receipt } });
+  } catch (error) {
+    console.error('verifyRentPayment error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to verify payment' });
+  }
+};
+
 module.exports = {
   getPayments,
   getTenantPayments,
   initiateRentPayment,
   recordManualPayment,
+  verifyRentPayment,
   handleWebhook
 };

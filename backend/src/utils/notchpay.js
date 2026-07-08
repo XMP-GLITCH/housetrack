@@ -51,7 +51,18 @@ const verifyWebhookSignature = (req) => {
   }
 };
 
+const verifyPayment = async (reference) => {
+  const response = await axios.get(`${NOTCHPAY_API_URL}/payments/${reference}`, {
+    headers: {
+      'Authorization': process.env.NOTCHPAY_PUBLIC_KEY,
+      'Accept': 'application/json',
+    }
+  });
+  return response.data;
+};
+
 module.exports = {
   initiatePayment,
+  verifyPayment,
   verifyWebhookSignature
 };

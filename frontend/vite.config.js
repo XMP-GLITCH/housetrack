@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // Temporarily self-destroying: forces stale clients to unregister the old
+      // service worker and wipe caches on next load, recovering phones stuck on
+      // an earlier cached bundle. Re-enable the full PWA once clients have updated.
+      selfDestroying: true,
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {

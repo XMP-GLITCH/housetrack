@@ -129,7 +129,7 @@ const StepRooms = ({ property, onNext, onSkip }) => {
     setError('');
     try {
       const results = await Promise.all(
-        valid.map(r => api.post('/rooms', { ...r, property_id: property.id, rent_amount: Number(r.rent_amount) }))
+        valid.map(r => api.post(`/rooms/property/${property.id}`, { room_number: r.room_number, room_type: r.room_type, rent_amount: Number(r.rent_amount) }))
       );
       onNext(results.map(r => r.data.data));
     } catch {
