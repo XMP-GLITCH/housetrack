@@ -84,58 +84,48 @@ const initiateRentPayment = async (req, res) => {
     const webhookUrl = `${process.env.API_BASE_URL || `http://${req.headers.host}/api/v1`}/payments/webhook`;
     const description = `Rent payment - ${rent_month} - Tenant ${tenant_id}`;
 
-    // Re-use an existing pending record only if the amount and room still match.
-    // If the tenant was moved to a different room the old record is stale — update it.
+    // Notchpay requires a unique merchant reference per initiation. It returns its
+    // OWN transaction reference (trx.xxx) which is the ONLY reference its verify and
+    // webhook endpoints recognise — so that is what we persist as notchpay_reference.
+    const merchantRef = `HRMS-PAY-${Date.now()}-${tenant_id}`;
+
+    // Call Notchpay FIRST — only persist the Payment row if we get a valid link back.
+    const notchpayRes = await initiatePayment(Number(amount), tenant.email || 'no-email@housetrack.com', description, merchantRef, callbackUrl, webhookUrl);
+    const paymentUrl = notchpayRes?.authorization_url;
+    const npRef = notchpayRes?.transaction?.reference;
+
+    if (!paymentUrl || !npRef) {
+      return res.status(502).json({ success: false, error: 'Payment provider did not return a valid payment link. Please try again.' });
+    }
+
+    // Re-use an existing pending record for this tenant + month, else create one.
     const existingPayment = await Payment.findOne({
       where: { tenant_id, rent_month, notchpay_status: 'pending' }
     });
 
     if (existingPayment) {
-      const amountChanged = Number(existingPayment.rent_amount) !== Number(amount);
-      const roomChanged   = String(existingPayment.room_id) !== String(room_id);
-
-      if (amountChanged || roomChanged) {
-        existingPayment.room_id     = room_id;
-        existingPayment.rent_amount = Number(amount);
-        existingPayment.balance     = Number(amount);
-        await existingPayment.save();
-      }
-
-      const notchpayRes = await initiatePayment(Number(amount), tenant.email || 'no-email@housetrack.com', description, existingPayment.notchpay_reference, callbackUrl, webhookUrl);
-      const paymentUrl = notchpayRes?.authorization_url;
-      if (paymentUrl) {
-        return res.json({ success: true, data: { payment_url: paymentUrl, reference: existingPayment.notchpay_reference } });
-      }
-      // No URL returned — do not fall through to create a duplicate row
-      return res.status(502).json({ success: false, error: 'Payment provider returned no payment link. Please try again.' });
+      existingPayment.room_id            = room_id;
+      existingPayment.rent_amount        = Number(amount);
+      existingPayment.balance            = Number(amount);
+      existingPayment.notchpay_reference = npRef;
+      await existingPayment.save();
+    } else {
+      await Payment.create({
+        tenant_id,
+        room_id,
+        landlord_id: tenant.landlord_id,
+        rent_month,
+        rent_amount: amount,
+        amount_paid: 0,
+        balance: amount,
+        payment_status: 'unpaid',
+        payment_date: new Date(),
+        notchpay_reference: npRef,
+        notchpay_status: 'pending'
+      });
     }
 
-    const reference = `HRMS-PAY-${Date.now()}-${tenant_id}`;
-
-    // Call Notchpay FIRST — only persist the Payment row if we get a valid URL back.
-    // Creating the row first would orphan it if the external call fails.
-    const notchpayRes = await initiatePayment(Number(amount), tenant.email || 'no-email@housetrack.com', description, reference, callbackUrl, webhookUrl);
-    const paymentUrl = notchpayRes?.authorization_url;
-
-    if (!paymentUrl) {
-      return res.status(502).json({ success: false, error: 'Failed to get payment link from Notchpay' });
-    }
-
-    await Payment.create({
-      tenant_id,
-      room_id,
-      landlord_id: tenant.landlord_id,
-      rent_month,
-      rent_amount: amount,
-      amount_paid: 0,
-      balance: amount,
-      payment_status: 'unpaid',
-      payment_date: new Date(),
-      notchpay_reference: reference,
-      notchpay_status: 'pending'
-    });
-
-    res.json({ success: true, data: { payment_url: paymentUrl, reference } });
+    res.json({ success: true, data: { payment_url: paymentUrl, reference: npRef } });
 
   } catch (error) {
     console.error('initiateRentPayment error:', error.message);
@@ -272,9 +262,25 @@ const recordManualPayment = async (req, res) => {
 const verifyRentPayment = async (req, res) => {
   try {
     const { reference } = req.body;
-    if (!reference) return res.status(400).json({ success: false, error: 'Reference is required' });
 
-    const payment = await Payment.findOne({ where: { notchpay_reference: reference } });
+    // Look up the payment by Notchpay's reference. If the callback passed a
+    // different identifier (Notchpay includes both its ref and our merchant ref
+    // under varying param names), fall back to the caller's latest pending payment.
+    let payment = reference
+      ? await Payment.findOne({ where: { notchpay_reference: reference } })
+      : null;
+
+    if (!payment) {
+      const where = { notchpay_status: 'pending' };
+      if (req.user.role === 'tenant') {
+        const t = await Tenant.findOne({ where: { user_id: req.user.id } });
+        if (t) where.tenant_id = t.id;
+      } else {
+        where.landlord_id = req.user.id;
+      }
+      payment = await Payment.findOne({ where, order: [['created_at', 'DESC']] });
+    }
+
     if (!payment) return res.status(404).json({ success: false, error: 'Payment record not found' });
 
     // Already confirmed — return current state without calling Notchpay again
@@ -283,16 +289,18 @@ const verifyRentPayment = async (req, res) => {
       return res.json({ success: true, data: { payment, receipt } });
     }
 
+    // Always verify using the STORED Notchpay reference (trx.xxx) — the only ref
+    // Notchpay's verify endpoint recognises.
     let notchpayData;
     try {
-      const result = await verifyPayment(reference);
+      const result = await verifyPayment(payment.notchpay_reference);
       notchpayData = result?.transaction || result?.data || result;
     } catch (err) {
       return res.status(502).json({ success: false, error: 'Could not reach payment provider to verify' });
     }
 
-    const status = notchpayData?.status;
-    if (status !== 'complete') {
+    const status = (notchpayData?.status || '').toLowerCase();
+    if (status !== 'complete' && status !== 'success') {
       return res.json({ success: false, error: `Payment not confirmed. Status: ${status || 'unknown'}` });
     }
 
