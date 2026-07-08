@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -13,7 +13,15 @@ const Register = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [registered, setRegistered] = useState(false);
-  const { register } = useAuth();
+  const { register, login, user } = useAuth();
+  const navigate = useNavigate();
+
+  // Once the account is created and signed in, send new landlords to onboarding
+  useEffect(() => {
+    if (user) {
+      navigate(user.role === 'landlord' ? '/landlord/onboarding' : '/', { replace: true });
+    }
+  }, [user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,10 +36,11 @@ const Register = () => {
 
     try {
       await register({ full_name: fullName, email, password });
-      setRegistered(true);
+      // Account is pre-confirmed on the backend, so sign in immediately.
+      // Navigation is handled by the useEffect above once the user is set.
+      await login(email, password);
     } catch (err) {
       setError(err.message || 'Registration failed. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };

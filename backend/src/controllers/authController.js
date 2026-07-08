@@ -15,14 +15,14 @@ const registerLandlord = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
 
-    // Register user in Supabase
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // Create the user in Supabase, pre-confirmed, so they can sign in immediately
+    // without an email-confirmation round-trip (Supabase's built-in mailer is
+    // rate-limited and unreliable). Uses the service-role key (admin API).
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
-      options: {
-        data: { full_name },
-        emailRedirectTo: `${process.env.CLIENT_URL}/auth/callback`,
-      }
+      email_confirm: true,
+      user_metadata: { full_name },
     });
 
     if (authError) {
